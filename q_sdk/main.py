@@ -3,6 +3,7 @@ import enum
 import json
 import logging
 import os.path
+import typing
 from pprint import pprint
 from typing import Union
 
@@ -161,6 +162,63 @@ class QApi:
         else:
             ret = self._make_request(Method.GET, "metric")
         return [Metric(**x) for x in ret["data"]]
+
+    def metric_create(
+            self, name: str, linked_host_id, linked_check_id="", disabled: bool = False, metric_templates: list = None,
+            scheduling_interval_id="", scheduling_period_id="", notification_period_id="", variables=None
+    ):
+        """This method is used to create a metric
+
+        :param name: Name of the metric
+        :param linked_host_id: ID of the linked_host
+        :param linked_check_id: Optional. ID of the linked_check
+        :param disabled: Optional. Specify True if you want to disable the metric
+        :param metric_templates: Optional. List of IDs of MetricTemplates
+        :param scheduling_interval_id: Optional. ID of a SchedulingInterval
+        :param scheduling_period_id: Optional. ID of a TimePeriod
+        :param notification_period_id: Optional. ID of a TimePeriod
+        :param variables: Optional. Dictionary of key value pairs.
+
+        :return: ID of the created Metric
+        """
+        params = {
+            "name": name,
+            "linked_host": linked_host_id,
+        }
+        if linked_check_id:
+            params["linked_check"] = linked_check_id
+        if disabled:
+            params["disabled"] = disabled
+        if metric_templates:
+            params["metric_templates"] = metric_templates
+        if scheduling_interval_id:
+            params["scheduling_interval"] = scheduling_interval_id
+        if scheduling_period_id:
+            params["scheduling_period"] = scheduling_period_id
+        if notification_period_id:
+            params["notification_period"] = notification_period_id
+        if variables:
+            params["variables"] = variables
+        ret = self._make_request(Method.POST, "metric", data=params)
+        return ret["data"]
+
+    def metric_change(self, metric_id: Union[str, int], changes: dict):
+        """This method is used to change a metric
+
+        :param metric_id: ID of the metric
+        :param changes: Dictionary with MetricParam as key and its value as str
+        :return:
+        """
+        changes = {x.value if isinstance(x, CheckParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"metric/{str(metric_id)}", data=changes)
+
+    def metric_delete(self, metric_id: Union[str, int]):
+        """This method is used to delete a metric
+
+        :param metric_id: ID of the Metric to delete
+        :return:
+        """
+        self._make_request(Method.DELETE, f"metric/{str(metric_id)}")
 
     def time_period_get(self, time_period_id=None):
         """This method is used to retrieve a time period
