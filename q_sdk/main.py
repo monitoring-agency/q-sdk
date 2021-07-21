@@ -3,7 +3,6 @@ import enum
 import json
 import logging
 import os.path
-import typing
 from pprint import pprint
 from typing import Union
 
@@ -11,7 +10,7 @@ import httpx
 
 from objects.check import Check, CheckParam
 from objects.metric import Metric
-from objects.time_period import TimePeriod
+from objects.time_period import TimePeriod, TimePeriodParam
 
 logger = logging.getLogger("QApi")
 
@@ -124,26 +123,24 @@ class QApi:
             params["check_type"] = check_type
         return self._make_request(Method.POST, "check", params)["data"]
 
-    def check_change(self, check_id: Union[str, int], changes: dict):
-        """This method is used to change a check.
+    def check_update(self, check_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a check.
 
         :param check_id: ID of the check
         :param changes: Dict of parameters to change. Key has to be Union[CheckParam, str], the value str
         """
-        check_id = str(check_id)
         changes = {x.value if isinstance(x, CheckParam) else x: changes[x] for x in changes}
         self._make_request(Method.PUT, f"check/{check_id}", data=changes)
 
-    def check_delete(self, check_id):
+    def check_delete(self, check_id: Union[str, int]) -> None:
         """This method is used to delete a check
 
         :param check_id: ID of the check to delete
         :return:
         """
-        check_id = str(check_id)
         self._make_request(Method.DELETE, f"check/{check_id}")
 
-    def metric_get(self, metric_id=None):
+    def metric_get(self, metric_id: Union[str, int, list] = None) -> Union[list, Metric]:
         """This method is used to retrieve metrics
 
         :param metric_id: Optional. If None, all Metrics are retrieved. Str or int to retrieve a single metric.
@@ -164,9 +161,10 @@ class QApi:
         return [Metric(**x) for x in ret["data"]]
 
     def metric_create(
-            self, name: str, linked_host_id, linked_check_id="", disabled: bool = False, metric_templates: list = None,
-            scheduling_interval_id="", scheduling_period_id="", notification_period_id="", variables=None
-    ):
+            self, name: str, linked_host_id: Union[str, int], linked_check_id: Union[str, int] = "",
+            disabled: bool = False, metric_templates: list = None, scheduling_interval: Union[str, int] = "",
+            scheduling_period_id: Union[str, int] = "", notification_period_id: Union[str, int] = "", variables=None
+    ) -> int:
         """This method is used to create a metric
 
         :param name: Name of the metric
@@ -174,7 +172,7 @@ class QApi:
         :param linked_check_id: Optional. ID of the linked_check
         :param disabled: Optional. Specify True if you want to disable the metric
         :param metric_templates: Optional. List of IDs of MetricTemplates
-        :param scheduling_interval_id: Optional. ID of a SchedulingInterval
+        :param scheduling_interval: Optional. Interval time the check should be executed
         :param scheduling_period_id: Optional. ID of a TimePeriod
         :param notification_period_id: Optional. ID of a TimePeriod
         :param variables: Optional. Dictionary of key value pairs.
@@ -191,8 +189,8 @@ class QApi:
             params["disabled"] = disabled
         if metric_templates:
             params["metric_templates"] = metric_templates
-        if scheduling_interval_id:
-            params["scheduling_interval"] = scheduling_interval_id
+        if scheduling_interval:
+            params["scheduling_interval"] = scheduling_interval
         if scheduling_period_id:
             params["scheduling_period"] = scheduling_period_id
         if notification_period_id:
@@ -202,15 +200,14 @@ class QApi:
         ret = self._make_request(Method.POST, "metric", data=params)
         return ret["data"]
 
-    def metric_change(self, metric_id: Union[str, int], changes: dict):
-        """This method is used to change a metric
+    def metric_update(self, metric_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a metric
 
         :param metric_id: ID of the metric
         :param changes: Dictionary with MetricParam as key and its value as str
-        :return:
         """
         changes = {x.value if isinstance(x, CheckParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"metric/{str(metric_id)}", data=changes)
+        self._make_request(Method.PUT, f"metric/{metric_id}", data=changes)
 
     def metric_delete(self, metric_id: Union[str, int]):
         """This method is used to delete a metric
@@ -218,23 +215,55 @@ class QApi:
         :param metric_id: ID of the Metric to delete
         :return:
         """
-        self._make_request(Method.DELETE, f"metric/{str(metric_id)}")
+        self._make_request(Method.DELETE, f"metric/{metric_id}")
 
-    def time_period_get(self, time_period_id=None):
+    def time_period_get(self, time_period_id: Union[int, str] = None) -> Union[list, TimePeriod]:
         """This method is used to retrieve a time period
 
-        :param time_period_id:
-        :return:
+        :param time_period_id: ID of a TimePeriod
+
+        :return: Returns a TimePeriod or a list of TimePeriods
         """
         if time_period_id:
             if isinstance(time_period_id, list):
                 ret = self._make_request(Method.GET, "timeperiod", {"filter": [str(x) for x in time_period_id]})
                 return [TimePeriod(**x) for x in ret["data"]]
             elif isinstance(time_period_id, str) or isinstance(time_period_id, int):
-                ret = self._make_request(Method.GET, f"timeperiod/{str(time_period_id)}")
+                ret = self._make_request(Method.GET, f"timeperiod/{time_period_id}")
                 return TimePeriod(**ret["data"])
             else:
                 raise ValueError
         else:
             ret = self._make_request(Method.GET, "timeperiod")
         return [TimePeriod(**x) for x in ret["data"]]
+
+    def time_period_create(self, name: str, time_periods: dict) -> int:
+        """This method is used to create a TimePeriod
+
+        :param name: Name of the TimePeriod
+        :param time_periods: Periods of a week. For the exact syntax see TimePeriodParam.TIME_PERIODS' docstring.
+
+        :return: ID of the created TimePeriod
+        """
+        params = {
+            "name": name,
+            "time_periods": time_periods
+        }
+        ret = self._make_request(Method.POST, "timeperiod", data=params)
+        return ret["data"]
+
+    def time_period_update(self, time_period_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a TimePeriod
+
+        :param time_period_id: ID of the TimePeriod
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, TimePeriodParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"timeperiod/{time_period_id}", data=changes)
+
+    def time_period_delete(self, time_period_id: Union[str, int]) -> None:
+        """This method is used to delete a TimePeriod
+
+        :param time_period_id: ID of the TimePeriod
+        """
+        self._make_request(Method.DELETE, f"timeperiod/{time_period_id}")
