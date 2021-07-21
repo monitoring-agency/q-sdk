@@ -9,6 +9,7 @@ from typing import Union
 import httpx
 
 from objects.check import Check, CheckParam
+from objects.global_variable import GlobalVariable
 from objects.metric import Metric
 from objects.time_period import TimePeriod, TimePeriodParam
 
@@ -217,7 +218,7 @@ class QApi:
         """
         self._make_request(Method.DELETE, f"metric/{metric_id}")
 
-    def time_period_get(self, time_period_id: Union[int, str] = None) -> Union[list, TimePeriod]:
+    def time_period_get(self, time_period_id: Union[int, str, list] = None) -> Union[list, TimePeriod]:
         """This method is used to retrieve a time period
 
         :param time_period_id: ID of a TimePeriod
@@ -267,3 +268,39 @@ class QApi:
         :param time_period_id: ID of the TimePeriod
         """
         self._make_request(Method.DELETE, f"timeperiod/{time_period_id}")
+
+    def global_variable_get(self, global_variable_id: Union[str, int, list] = None) -> Union[list, GlobalVariable]:
+        """This method is used to create a GlobalVariable.
+
+        :param global_variable_id: ID or list of IDs of GlobalVariables
+
+        :return: Returns a GlobalVariable or a list of them
+        """
+        if global_variable_id:
+            if isinstance(global_variable_id, list):
+                ret = self._make_request(Method.GET, "globalvariable", {"filter": [str(x) for x in global_variable_id]})
+                return [GlobalVariable(**x) for x in ret["data"]]
+            elif isinstance(global_variable_id, str) or isinstance(global_variable_id, int):
+                ret = self._make_request(Method.GET, f"globalvariable/{global_variable_id}")
+                return GlobalVariable(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "globalvariable")
+        return [GlobalVariable(**x) for x in ret["data"]]
+
+    def global_variable_update(self, global_variable_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a GlobalVariable
+
+        :param global_variable_id: ID of a GlobalVariable
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, TimePeriodParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"globalvariable/{global_variable_id}", data=changes)
+
+    def global_variable_delete(self, global_variable_id: Union[str, int]) -> None:
+        """This method is used to delete a GlobalVariable
+
+        :param global_variable_id: ID of the GlobalVariable
+        """
+        self._make_request(Method.DELETE, f"globalvariable/{global_variable_id}")
