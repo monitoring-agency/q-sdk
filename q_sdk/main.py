@@ -12,6 +12,7 @@ import httpx
 from objects.check import Check, CheckParam
 from objects.global_variable import GlobalVariable
 from objects.metric import Metric
+from objects.metric_template import MetricTemplate, MetricTemplateParam
 from objects.time_period import TimePeriod, TimePeriodParam
 
 logger = logging.getLogger("QApi")
@@ -323,4 +324,71 @@ class QApi:
         """
         self._make_request(Method.DELETE, f"globalvariable/{global_variable_id}")
 
+    def metric_template_get(self, metric_template_id: Union[str, int, list] = None) -> Union[list, MetricTemplate]:
+        """This method is used to create a MetricTemplate.
 
+        :param metric_template_id: ID or list of IDs of MetricTemplate
+
+        :return: Returns a MetricTemplate or a list of them
+        """
+        if metric_template_id:
+            if isinstance(metric_template_id, list):
+                ret = self._make_request(Method.GET, "metrictemplate", {"filter": [str(x) for x in metric_template_id]})
+                return [MetricTemplate(**x) for x in ret["data"]]
+            elif isinstance(metric_template_id, str) or isinstance(metric_template_id, int):
+                ret = self._make_request(Method.GET, f"metrictemplate/{metric_template_id}")
+                return MetricTemplate(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "metrictemplate")
+        return [MetricTemplate(**x) for x in ret["data"]]
+
+    def metric_template_create(
+            self, name: str, linked_check_id: Union[str, int] = "", metric_templates: Union[list, str, int] = None,
+            scheduling_interval: Union[str, int] = "", scheduling_period_id: Union[str, int] = "",
+            notification_period_id: Union[str, int] = "", variables: dict = None
+    ) -> int:
+        """This method is used to create a MetricTemplate
+
+        :param name: Name of the MetricTemplate
+        :param linked_check_id: Optional. ID of a Check.
+        :param metric_templates: Optional. ID or list of IDs of MetricTemplate this MetricTemplate should inherit from.
+        :param scheduling_interval: Optional. Interval the checks should be executed
+        :param scheduling_period_id: Optional. ID of the TimePeriod in which check should be executed
+        :param notification_period_id: Optional. ID of the TimePeriod in which checks should cause notifications
+        :param variables: Optional. Dictionary of key value pairs.
+        :return:
+        """
+        params = {"name": name}
+        if linked_check_id:
+            params["linked_check"] = linked_check_id
+        if metric_templates:
+            params["metric_templates"] = metric_templates
+        if scheduling_interval:
+            params["scheduling_interval"] = scheduling_interval
+        if scheduling_period_id:
+            params["scheduling_period"] = scheduling_period_id
+        if notification_period_id:
+            params["notification_period"] = notification_period_id
+        if variables:
+            params["variables"] = variables
+
+        ret = self._make_request(Method.POST, "metrictemplate", data=params)
+        return ret["data"]
+
+    def metric_template_update(self, metric_template_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a MetricTemplate
+
+        :param metric_template_id: ID of a MetricTemplate
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, MetricTemplateParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"metrictemplate/{metric_template_id}", data=changes)
+
+    def metric_template_delete(self, metric_template_id: Union[str, int]) -> None:
+        """This method is used to delete a MetricTemplate
+
+        :param metric_template_id: ID of a MetricTemplate
+        """
+        self._make_request(Method.DELETE, f"metrictemplates/{metric_template_id}")
