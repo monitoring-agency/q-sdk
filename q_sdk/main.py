@@ -3,6 +3,7 @@ import enum
 import json
 import logging
 import os.path
+from hashlib import sha256
 from pprint import pprint
 from typing import Union
 
@@ -38,6 +39,15 @@ class QApi:
         self.password = password
         self.uri = uri
         self.token = ""
+        path = os.path.expanduser("~/.q-sdk/")
+        self.token_path = os.path.join(path, sha256(f"{self.uri}-{self.username}.txt".encode("utf-8")).hexdigest())
+        if not os.path.exists(path) or not os.path.isdir(path):
+            os.makedirs(path)
+        if os.path.exists(self.token_path):
+            try:
+                self.token = open(self.token_path).read()
+            except FileNotFoundError:
+                self.token = ""
         self.client = httpx.Client(verify=verify)
 
     def authenticate(self):
@@ -61,6 +71,8 @@ class QApi:
                 if decoded["success"]:
                     logger.debug("Authentication was successful, saving token")
                     self.token = decoded["data"]
+                    with open(os.path.expanduser(self.token_path), "w") as fh:
+                        fh.write(self.token)
                     break
             except PermissionError:
                 logger.error(f"Authentication failed {i}/3")
@@ -68,6 +80,8 @@ class QApi:
             exit(1)
 
     def _make_request(self, method: Method, endpoint: str, data: dict = None):
+        if not self.token:
+            self.authenticate()
         encoded = base64.urlsafe_b64encode(f"{self.username}:{self.token}".encode("utf-8"))
         header = {"Authentication": encoded.decode("utf-8")}
         if method == Method.GET:
@@ -80,6 +94,10 @@ class QApi:
             ret = self.client.delete(os.path.join(self.uri, endpoint), headers=header)
 
         if ret.status_code != 200:
+            if ret.status_code == 401:
+                logger.debug(f"Authentication failed, trying to authenticate..")
+                self.authenticate()
+                self._make_request(method, endpoint, data)
             pprint(ret.text)
             exit(1)
         decoded = json.loads(ret.text)
@@ -304,3 +322,5 @@ class QApi:
         :param global_variable_id: ID of the GlobalVariable
         """
         self._make_request(Method.DELETE, f"globalvariable/{global_variable_id}")
+
+
