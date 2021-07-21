@@ -10,6 +10,7 @@ from typing import Union
 import httpx
 
 from objects.check import Check, CheckParam
+from objects.contact_group import ContactGroup, ContactGroupParam
 from objects.global_variable import GlobalVariable
 from objects.metric import Metric
 from objects.metric_template import MetricTemplate, MetricTemplateParam
@@ -392,3 +393,50 @@ class QApi:
         :param metric_template_id: ID of a MetricTemplate
         """
         self._make_request(Method.DELETE, f"metrictemplates/{metric_template_id}")
+
+    def contact_group_get(self, contact_group_id: Union[str, int, list] = None) -> Union[list, ContactGroup]:
+        """This method is used to create a ContactGroup.
+
+        :param contact_group_id: ID or list of IDs of ContactGroup
+
+        :return: Returns a ContactGroup or a list of them
+        """
+        if contact_group_id:
+            if isinstance(contact_group_id, list):
+                ret = self._make_request(Method.GET, "contactgroup", {"filter": [str(x) for x in contact_group_id]})
+                return [ContactGroup(**x) for x in ret["data"]]
+            elif isinstance(contact_group_id, str) or isinstance(contact_group_id, int):
+                ret = self._make_request(Method.GET, f"contactgroup/{contact_group_id}")
+                return ContactGroup(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "contactgroup")
+        return [ContactGroup(**x) for x in ret["data"]]
+
+    def contact_group_create(self, name: str, linked_contacts: Union[list, str, int] = None) -> None:
+        """This method is used to create a ContactGroup
+
+        :param name: Name of the ContactGroup
+        :param linked_contacts: Optional. ID of Contact or list of them.
+        """
+        params = {"name": name}
+        if linked_contacts:
+            params["linked_contacts"] = linked_contacts
+        self._make_request(Method.POST, "contactgroup", data=params)
+
+    def contact_group_update(self, contact_group_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a ContactGroup
+
+        :param contact_group_id: ID of a ContactGroup
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, ContactGroupParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"contactgroup/{contact_group_id}", data=changes)
+
+    def contact_group_delete(self, contact_group_id: Union[str, int]) -> None:
+        """This method is used to delete a ContactGroup
+
+        :param contact_group_id: ID of the ContactGroup
+        """
+        self._make_request(Method.DELETE, f"contactgroup/{contact_group_id}")
