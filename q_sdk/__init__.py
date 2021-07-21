@@ -1,1 +1,1 @@
-from main import QApi
+from .main import QApi
