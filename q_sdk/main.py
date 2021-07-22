@@ -13,6 +13,7 @@ from objects.check import Check, CheckParam
 from objects.contact import Contact, ContactParam
 from objects.contact_group import ContactGroup, ContactGroupParam
 from objects.global_variable import GlobalVariable
+from objects.host_template import HostTemplate, HostTemplateParam
 from objects.metric import Metric
 from objects.metric_template import MetricTemplate, MetricTemplateParam
 from objects.time_period import TimePeriod, TimePeriodParam
@@ -508,4 +509,73 @@ class QApi:
         :param contact_id: ID of the Contact
         """
         self._make_request(Method.DELETE, f"contact/{contact_id}")
+
+    def host_template_get(self, host_template_id: Union[str, int, list] = None) -> Union[list, HostTemplate]:
+        """This method is used to retrieve a HostTemplate or a list of them
+
+        :param host_template_id: ID of a HostTemplate or a list of them
+        """
+        if host_template_id:
+            if isinstance(host_template_id, list):
+                ret = self._make_request(Method.GET, "hosttemplate", {"filter": [str(x) for x in host_template_id]})
+                return [HostTemplate(**x) for x in ret["data"]]
+            elif isinstance(host_template_id, str) or isinstance(host_template_id, int):
+                ret = self._make_request(Method.GET, f"hosttemplate/{host_template_id}")
+                return HostTemplate(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "hosttemplate")
+        return [HostTemplate(**x) for x in ret["data"]]
+
+    def host_template_create(
+            self, name: str, address: str = "", linked_check_id: Union[str, int] = "",
+            host_templates: Union[list, str, int] = None, scheduling_interval: Union[str, int] = "",
+            scheduling_period_id: Union[str, int] = "", notification_period_id: Union[str, int] = "",
+            variables: dict = None
+    ) -> int:
+        """This method is used to create a HostTemplate
+
+        :param name: Name of the Contact
+        :param address: Optional. Address of the HostTemplate
+        :param host_templates: Optional. ID of a HostTemplate or a list of them.
+        :param linked_check_id: Optional. ID of a linked check
+        :param scheduling_interval: Optional. Interval of the scheduler to execute the check in seconds
+        :param scheduling_period_id: Optional. ID of a TimePeriod
+        :param notification_period_id: Optional. ID of a TimePeriod
+        :param variables: Optional. Dictionary of key value pairs.
+        """
+        params = {"name": name}
+        if address:
+            params["address"] = address
+        if linked_check_id:
+            params["linked_check"] = linked_check_id
+        if host_templates:
+            params["host_templates"] = host_templates
+        if scheduling_interval:
+            params["scheduling_interval"] = scheduling_interval
+        if scheduling_period_id:
+            params["scheduling_period"] = scheduling_period_id
+        if notification_period_id:
+            params["notification_period"] = notification_period_id
+        if variables:
+            params["variables"] = variables
+        ret = self._make_request(Method.POST, "host_template", data=params)
+        return ret["data"]
+
+    def host_template_update(self, host_template_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a Contact
+
+        :param host_template_id: ID of a HostTemplate
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, HostTemplateParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"hosttemplate/{host_template_id}", data=changes)
+
+    def host_template_delete(self, host_template_id: Union[str, int]) -> None:
+        """This method is used to delete a HostTemplate
+
+        :param host_template_id: ID of the HostTemplate
+        """
+        self._make_request(Method.DELETE, f"hosttemplate/{host_template_id}")
 
