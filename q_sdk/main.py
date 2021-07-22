@@ -10,6 +10,7 @@ from typing import Union
 import httpx
 
 from objects.check import Check, CheckParam
+from objects.contact import Contact, ContactParam
 from objects.contact_group import ContactGroup, ContactGroupParam
 from objects.global_variable import GlobalVariable
 from objects.metric import Metric
@@ -359,7 +360,8 @@ class QApi:
         :param scheduling_period_id: Optional. ID of the TimePeriod in which check should be executed
         :param notification_period_id: Optional. ID of the TimePeriod in which checks should cause notifications
         :param variables: Optional. Dictionary of key value pairs.
-        :return:
+
+        :return: ID of the created MetricTemplate
         """
         params = {"name": name}
         if linked_check_id:
@@ -440,3 +442,70 @@ class QApi:
         :param contact_group_id: ID of the ContactGroup
         """
         self._make_request(Method.DELETE, f"contactgroup/{contact_group_id}")
+
+    def contact_get(self, contact_id: Union[str, int, list] = None) -> Union[list, Contact]:
+        """This method is used to retrieve a Contact or a list of them
+
+        :param contact_id: ID of a Contact or a list of them
+        """
+        if contact_id:
+            if isinstance(contact_id, list):
+                ret = self._make_request(Method.GET, "contact", {"filter": [str(x) for x in contact_id]})
+                return [Contact(**x) for x in ret["data"]]
+            elif isinstance(contact_id, str) or isinstance(contact_id, int):
+                ret = self._make_request(Method.GET, f"contact/{contact_id}")
+                return Contact(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "contact")
+        return [Contact(**x) for x in ret["data"]]
+
+    def contact_create(
+            self, name: str, mail: str = "", linked_host_notifications: Union[list, int, str] = None,
+            linked_host_notification_period_id: Union[str, int] = None,
+            linked_metric_notifications: Union[list, int, str] = None,
+            linked_metric_notification_period_id: Union[str, int] = "", variables: dict = None
+    ) -> int:
+        """This method is used to create a Contact
+
+        :param name: Name of the Contact
+        :param mail: Optional. Mail of a Contact
+        :param linked_host_notifications: Optional. List of IDs of checks for Host notifications
+        :param linked_host_notification_period_id: Optional. ID of TimePeriod for Host notifications
+        :param linked_metric_notifications: Optional. List of CHecks for Metric notifications
+        :param linked_metric_notification_period_id: Optional. ID of a TimePeriod for Metric notifications
+        :param variables: Optional. Dictionary of key value pairs.
+        """
+        params = {"name": name}
+        if mail:
+            params["mail"] = mail
+        if linked_host_notifications:
+            params["linked_host_notifications"] = linked_host_notifications
+        if linked_host_notification_period_id:
+            params["linked_host_notification_period"] = linked_host_notification_period_id
+        if linked_metric_notifications:
+            params["linked_metric_notifications"] = linked_metric_notifications
+        if linked_metric_notification_period_id:
+            params["linked_metric_notification_period"] = linked_metric_notification_period_id
+        if variables:
+            params["variables"] = variables
+        ret = self._make_request(Method.POST, "contact", data=params)
+        return ret["data"]
+
+    def contact_update(self, contact_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a Contact
+
+        :param contact_id: ID of a Contact
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, ContactParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"contact/{contact_id}", data=changes)
+
+    def contact_delete(self, contact_id: Union[str, int]) -> None:
+        """This method is used to delete a Contact
+
+        :param contact_id: ID of the Contact
+        """
+        self._make_request(Method.DELETE, f"contact/{contact_id}")
+
