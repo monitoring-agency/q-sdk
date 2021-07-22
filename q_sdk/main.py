@@ -13,6 +13,7 @@ from objects.check import Check, CheckParam
 from objects.contact import Contact, ContactParam
 from objects.contact_group import ContactGroup, ContactGroupParam
 from objects.global_variable import GlobalVariable
+from objects.host import Host, HostParam
 from objects.host_template import HostTemplate, HostTemplateParam
 from objects.metric import Metric
 from objects.metric_template import MetricTemplate, MetricTemplateParam
@@ -579,3 +580,72 @@ class QApi:
         """
         self._make_request(Method.DELETE, f"hosttemplate/{host_template_id}")
 
+    def host_get(self, host_id: Union[str, int, list] = None) -> Union[list, Host]:
+        """This method is used to retrieve a Host or a list of them
+
+        :param host_id: ID of a Host or a list of them
+        """
+        if host_id:
+            if isinstance(host_id, list):
+                ret = self._make_request(Method.GET, "host", {"filter": [str(x) for x in host_id]})
+                return [Host(**x) for x in ret["data"]]
+            elif isinstance(host_id, str) or isinstance(host_id, int):
+                ret = self._make_request(Method.GET, f"host/{host_id}")
+                return Host(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "host")
+        return [Host(**x) for x in ret["data"]]
+
+    def host_create(
+            self, name: str, address: str = "", linked_check_id: Union[str, int] = "", disabled: bool = False,
+            host_templates: Union[list, str, int] = None, scheduling_interval: Union[str, int] = "",
+            scheduling_period_id: Union[str, int] = "", notification_period_id: Union[str, int] = "",
+            variables: dict = None
+    ) -> int:
+        """This method is used to create a HostTemplate
+
+        :param name: Name of the Contact
+        :param address: Optional. Address of the HostTemplate
+        :param host_templates: Optional. ID of a HostTemplate or a list of them.
+        :param linked_check_id: Optional. ID of a linked check
+        :param disabled: Optional. Defaults to False
+        :param scheduling_interval: Optional. Interval of the scheduler to execute the check in seconds
+        :param scheduling_period_id: Optional. ID of a TimePeriod
+        :param notification_period_id: Optional. ID of a TimePeriod
+        :param variables: Optional. Dictionary of key value pairs.
+        """
+        params = {"name": name, "disabled": disabled}
+        if address:
+            params["address"] = address
+        if linked_check_id:
+            params["linked_check"] = linked_check_id
+        if host_templates:
+            params["host_templates"] = host_templates
+        if scheduling_interval:
+            params["scheduling_interval"] = scheduling_interval
+        if scheduling_period_id:
+            params["scheduling_period"] = scheduling_period_id
+        if notification_period_id:
+            params["notification_period"] = notification_period_id
+        if variables:
+            params["variables"] = variables
+        ret = self._make_request(Method.POST, "host", data=params)
+        return ret["data"]
+
+    def host_update(self, host_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a Host
+
+        :param host_id: ID of a Host
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, HostParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"host/{host_id}", data=changes)
+
+    def host_delete(self, host_id: Union[str, int]) -> None:
+        """This method is used to delete a Host
+
+        :param host_id: ID of the Host
+        """
+        self._make_request(Method.DELETE, f"host/{host_id}")
