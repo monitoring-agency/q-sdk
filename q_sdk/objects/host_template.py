@@ -4,10 +4,11 @@ from objects.base import Base
 
 
 class HostTemplate(Base):
-    def __init__(self, name, address="", linked_check=None, host_templates=None, scheduling_interval="",
-                 scheduling_period=None, notification_period=None, variables=None):
+    def __init__(self, name, id=None, address="", linked_check=None, host_templates=None, scheduling_interval="",
+                 scheduling_period=None, notification_period=None, variables=None, comment=""):
         super(HostTemplate, self).__init__()
         self.name = name
+        self.id = id
         self.address = address
         self.linked_check = linked_check
         self.host_templates = host_templates
@@ -15,6 +16,7 @@ class HostTemplate(Base):
         self.scheduling_period = scheduling_period
         self.notification_period = notification_period
         self.variables = variables
+        self.comment = comment
 
 
 class HostTemplateParam(enum.Enum):

@@ -4,10 +4,14 @@ from objects.base import Base
 
 
 class Host(Base):
-    def __init__(self, name, address="", linked_check=None, disabled=False, host_templates=None,
-                 scheduling_interval=None, scheduling_period=None, notification_period=None, variables=None):
+    def __init__(
+        self, name, linked_proxy, id=None, address="", linked_check=None, disabled=False, host_templates=None,
+        scheduling_interval=None, scheduling_period=None, notification_period=None, variables=None, comment=""
+    ):
         super(Host, self).__init__()
         self.name = name
+        self.linked_proxy = linked_proxy
+        self.id = id
         self.address = address
         self.linked_check = linked_check
         self.disabled = disabled
@@ -16,6 +20,7 @@ class Host(Base):
         self.scheduling_period = scheduling_period
         self.notification_period = notification_period
         self.variables = variables
+        self.comment = comment
 
 
 class HostParam(enum.Enum):
