@@ -714,3 +714,13 @@ class QApi:
         """
         self._make_request(Method.DELETE, f"proxy/{proxy_id}")
 
+    def update_declaration(self, proxies: Union[list, str, int] = None) -> None:
+        """This method is used to update the declaration of a proxy
+
+        :param proxies: List of proxy_ids, proxy_ids or None. If None, all declarations will be updated
+        """
+        data = {
+            "proxies": proxies if isinstance(proxies, list) else str(proxies)
+        }
+        self._make_request(Method.POST, "reloadDeclaration", data=data if proxies else None, timeout=30)
+
