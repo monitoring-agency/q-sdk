@@ -724,3 +724,11 @@ class QApi:
         }
         self._make_request(Method.POST, "reloadDeclaration", data=data if proxies else None, timeout=30)
 
+    def generate_proxy_configuration(self, proxy_id: int):
+        """This method is used to generate the configuration for a proxy
+
+        :param proxy_id: ID of the Proxy the configuration should be generated
+        """
+        data = {"proxy": proxy_id}
+        ret = self._make_request(Method.POST, "generateProxyConfiguration", data=data)
+        return ret["data"]
