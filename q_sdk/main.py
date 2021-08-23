@@ -563,7 +563,7 @@ class QApi:
             params["notification_period"] = notification_period_id
         if variables:
             params["variables"] = variables
-        ret = self._make_request(Method.POST, "host_template", data=params)
+        ret = self._make_request(Method.POST, "hosttemplate", data=params)
         return ret["data"]
 
     def host_template_update(self, host_template_id: Union[str, int], changes: dict) -> None:
