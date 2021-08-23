@@ -652,3 +652,65 @@ class QApi:
         :param host_id: ID of the Host
         """
         self._make_request(Method.DELETE, f"host/{host_id}")
+
+    def proxy_get(self, proxy_id: Union[str, int, list] = None) -> Union[list, Proxy]:
+        """This method is used to retrieve a Proxy or a list of them
+
+        :param proxy_id: ID of a Proxy or a list of them
+        """
+        if proxy_id:
+            if isinstance(proxy_id, list):
+                ret = self._make_request(Method.GET, "proxy", {"filter": [str(x) for x in proxy_id]})
+                return [Proxy(**x) for x in ret["data"]]
+            elif isinstance(proxy_id, str) or isinstance(proxy_id, int):
+                ret = self._make_request(Method.GET, f"proxy/{proxy_id}")
+                return Proxy(**ret["data"])
+            else:
+                raise ValueError
+        else:
+            ret = self._make_request(Method.GET, "proxy")
+        return [Proxy(**x) for x in ret["data"]]
+
+    def proxy_create(
+            self, name: str, address: str, port: Union[str, int], web_address: str, web_port: str,
+            comment: str = "", disabled: bool = False
+    ) -> int:
+        """This method is used to create a Proxy
+
+        :param name: Name of the Proxy
+        :param address: Address of the Proxy
+        :param port: Port of the Proxy
+        :param disabled: Optional. Defaults to False
+        :param web_address: Address of q-web as seen from the proxy
+        :param web_port: Port of q-web as seen from the proxy
+        :param comment: Optional. Comment.
+        """
+        params = {
+            "name": name,
+            "disabled": disabled,
+            "address": address,
+            "port": port,
+            "web_address": web_address,
+            "web_port": web_port
+        }
+        if comment:
+            params["comment"] = comment
+        ret = self._make_request(Method.POST, "proxy", data=params)
+        return ret["data"]
+
+    def proxy_update(self, proxy_id: Union[str, int], changes: dict) -> None:
+        """This method is used to update a Proxy
+
+        :param proxy_id: ID of a Proxy
+        :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
+        """
+        changes = {x.value if isinstance(x, ProxyParam) else x: changes[x] for x in changes}
+        self._make_request(Method.PUT, f"proxy/{proxy_id}", data=changes)
+
+    def proxy_delete(self, proxy_id: Union[str, int]) -> None:
+        """This method is used to delete a Proxy
+
+        :param proxy_id: ID of the Proxy
+        """
+        self._make_request(Method.DELETE, f"proxy/{proxy_id}")
+
