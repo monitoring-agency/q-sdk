@@ -619,7 +619,7 @@ class QApi:
         :param notification_period_id: Optional. ID of a TimePeriod
         :param variables: Optional. Dictionary of key value pairs.
         """
-        params = {"name": name, "disabled": disabled}
+        params = {"name": name, "disabled": disabled, "linked_proxy": str(linked_proxy_id)}
         if address:
             params["address"] = address
         if linked_check_id:
