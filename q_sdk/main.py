@@ -601,15 +601,16 @@ class QApi:
         return [Host(**x) for x in ret["data"]]
 
     def host_create(
-            self, name: str, address: str = "", linked_check_id: Union[str, int] = "", disabled: bool = False,
-            host_templates: Union[list, str, int] = None, scheduling_interval: Union[str, int] = "",
-            scheduling_period_id: Union[str, int] = "", notification_period_id: Union[str, int] = "",
-            variables: dict = None
+            self, name: str, linked_proxy_id: Union[str, int], address: str = "", linked_check_id: Union[str, int] = "",
+            disabled: bool = False, host_templates: Union[list, str, int] = None,
+            scheduling_interval: Union[str, int] = "", scheduling_period_id: Union[str, int] = "",
+            notification_period_id: Union[str, int] = "", variables: dict = None
     ) -> int:
-        """This method is used to create a HostTemplate
+        """This method is used to create a Host
 
-        :param name: Name of the Contact
-        :param address: Optional. Address of the HostTemplate
+        :param name: Name of the Host
+        :param linked_proxy_id: ID of the proxy this Host is linked to
+        :param address: Optional. Address of the Host
         :param host_templates: Optional. ID of a HostTemplate or a list of them.
         :param linked_check_id: Optional. ID of a linked check
         :param disabled: Optional. Defaults to False
