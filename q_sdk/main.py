@@ -9,6 +9,7 @@ from typing import Union
 
 import httpx
 
+from exceptions import HttpStatusCodeException
 from objects.check import Check, CheckParam
 from objects.contact import Contact, ContactParam
 from objects.contact_group import ContactGroup, ContactGroupParam
@@ -17,6 +18,7 @@ from objects.host import Host, HostParam
 from objects.host_template import HostTemplate, HostTemplateParam
 from objects.metric import Metric
 from objects.metric_template import MetricTemplate, MetricTemplateParam
+from objects.proxy import Proxy, ProxyParam
 from objects.time_period import TimePeriod, TimePeriodParam
 
 logger = logging.getLogger("QApi")
@@ -84,27 +86,27 @@ class QApi:
         else:
             exit(1)
 
-    def _make_request(self, method: Method, endpoint: str, data: dict = None):
+    def _make_request(self, method: Method, endpoint: str, data: dict = None, timeout: int = 5):
         if not self.token:
             self.authenticate()
         encoded = base64.urlsafe_b64encode(f"{self.username}:{self.token}".encode("utf-8"))
         header = {"Authentication": encoded.decode("utf-8")}
         if method == Method.GET:
-            ret = self.client.get(os.path.join(self.uri, endpoint), params=data, headers=header)
+            ret = self.client.get(os.path.join(self.uri, endpoint), params=data, headers=header, timeout=timeout)
         elif method == Method.POST:
-            ret = self.client.post(os.path.join(self.uri, endpoint), json=data, headers=header)
+            ret = self.client.post(os.path.join(self.uri, endpoint), json=data, headers=header, timeout=timeout)
         elif method == Method.PUT:
-            ret = self.client.put(os.path.join(self.uri, endpoint), json=data, headers=header)
+            ret = self.client.put(os.path.join(self.uri, endpoint), json=data, headers=header, timeout=timeout)
         elif method == Method.DELETE:
-            ret = self.client.delete(os.path.join(self.uri, endpoint), headers=header)
+            ret = self.client.delete(os.path.join(self.uri, endpoint), headers=header, timeout=timeout)
 
-        if ret.status_code != 200:
+        if ret.status_code != 200 and ret.status_code != 201:
             if ret.status_code == 401:
                 logger.debug(f"Authentication failed, trying to authenticate..")
                 self.authenticate()
                 self._make_request(method, endpoint, data)
             pprint(ret.text)
-            exit(1)
+            raise HttpStatusCodeException(ret.status_code, ret.text)
         decoded = json.loads(ret.text)
         if not decoded["success"]:
             pprint(decoded["message"])
