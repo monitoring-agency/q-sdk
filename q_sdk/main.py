@@ -722,7 +722,7 @@ class QApi:
         data = {
             "proxies": proxies if isinstance(proxies, list) else str(proxies)
         }
-        self._make_request(Method.POST, "reloadDeclaration", data=data if proxies else None, timeout=30)
+        self._make_request(Method.POST, "updateDeclaration", data=data if proxies else None, timeout=30)
 
     def generate_proxy_configuration(self, proxy_id: int):
         """This method is used to generate the configuration for a proxy
