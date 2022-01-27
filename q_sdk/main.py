@@ -1,15 +1,13 @@
-import base64
 import enum
 import json
 import logging
 import os.path
-from hashlib import sha256
 from pprint import pprint
 from typing import Union
 
 import httpx
 
-from exceptions import HttpStatusCodeException
+from error import HttpStatusCodeException
 from objects.check import Check, CheckParam
 from objects.contact import Contact, ContactParam
 from objects.contact_group import ContactGroup, ContactGroupParam
@@ -45,16 +43,6 @@ class QApi:
         self.username = username
         self.password = password
         self.uri = uri
-        self.token = ""
-        path = os.path.expanduser("~/.q-sdk/")
-        self.token_path = os.path.join(path, sha256(f"{self.uri}-{self.username}.txt".encode("utf-8")).hexdigest())
-        if not os.path.exists(path) or not os.path.isdir(path):
-            os.makedirs(path)
-        if os.path.exists(self.token_path):
-            try:
-                self.token = open(self.token_path).read()
-            except FileNotFoundError:
-                self.token = ""
         self.client = httpx.Client(verify=verify)
 
     def authenticate(self):
@@ -76,36 +64,28 @@ class QApi:
                     logger.error("Got malformed json")
                     raise PermissionError("Got malformed json")
                 if decoded["success"]:
-                    logger.debug("Authentication was successful, saving token")
-                    self.token = decoded["data"]
-                    with open(os.path.expanduser(self.token_path), "w") as fh:
-                        fh.write(self.token)
+                    logger.debug("Authentication was successful")
                     break
             except PermissionError:
                 logger.error(f"Authentication failed {i}/3")
         else:
             exit(1)
 
-    def _make_request(self, method: Method, endpoint: str, data: dict = None, timeout: int = 5):
-        if not self.token:
-            self.authenticate()
-        encoded = base64.urlsafe_b64encode(f"{self.username}:{self.token}".encode("utf-8"))
-        header = {"Authentication": encoded.decode("utf-8")}
+    def _make_request(self, method: Method, endpoint: str, data: dict = None, timeout: int = 20):
         if method == Method.GET:
-            ret = self.client.get(os.path.join(self.uri, endpoint), params=data, headers=header, timeout=timeout)
+            ret = self.client.get(os.path.join(self.uri, endpoint), params=data, timeout=timeout)
         elif method == Method.POST:
-            ret = self.client.post(os.path.join(self.uri, endpoint), json=data, headers=header, timeout=timeout)
+            ret = self.client.post(os.path.join(self.uri, endpoint), json=data,  timeout=timeout)
         elif method == Method.PUT:
-            ret = self.client.put(os.path.join(self.uri, endpoint), json=data, headers=header, timeout=timeout)
+            ret = self.client.put(os.path.join(self.uri, endpoint), json=data,  timeout=timeout)
         elif method == Method.DELETE:
-            ret = self.client.delete(os.path.join(self.uri, endpoint), headers=header, timeout=timeout)
+            ret = self.client.delete(os.path.join(self.uri, endpoint), timeout=timeout)
 
         if ret.status_code != 200 and ret.status_code != 201:
             if ret.status_code == 401:
                 logger.debug(f"Authentication failed, trying to authenticate..")
                 self.authenticate()
-                self._make_request(method, endpoint, data)
-            pprint(ret.text)
+                return self._make_request(method, endpoint, data)
             raise HttpStatusCodeException(ret.status_code, ret.text)
         decoded = json.loads(ret.text)
         if not decoded["success"]:
@@ -121,15 +101,15 @@ class QApi:
         """
         if check_id:
             if isinstance(check_id, list):
-                ret = self._make_request(Method.GET, "check", {"filter": [str(x) for x in check_id]})
+                ret = self._make_request(Method.GET, "checks", {"filter": [str(x) for x in check_id]})
                 return [Check(**x) for x in ret["data"]]
             elif isinstance(check_id, str) or isinstance(check_id, int):
-                ret = self._make_request(Method.GET, f"check/{str(check_id)}")
+                ret = self._make_request(Method.GET, f"checks/{str(check_id)}")
                 return Check(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "check")
+            ret = self._make_request(Method.GET, "checks")
         return [Check(**x) for x in ret["data"]]
 
     def check_create(self, name: str, cmd: str = "", check_type: str = "") -> int:
@@ -147,7 +127,7 @@ class QApi:
             params["cmd"] = cmd
         if check_type:
             params["check_type"] = check_type
-        return self._make_request(Method.POST, "check", params)["data"]
+        return self._make_request(Method.POST, "checks", params)["data"]
 
     def check_update(self, check_id: Union[str, int], changes: dict) -> None:
         """This method is used to update a check.
@@ -156,7 +136,7 @@ class QApi:
         :param changes: Dict of parameters to change. Key has to be Union[CheckParam, str], the value str
         """
         changes = {x.value if isinstance(x, CheckParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"check/{check_id}", data=changes)
+        self._make_request(Method.PUT, f"checks/{check_id}", data=changes)
 
     def check_delete(self, check_id: Union[str, int]) -> None:
         """This method is used to delete a check
@@ -164,7 +144,7 @@ class QApi:
         :param check_id: ID of the check to delete
         :return:
         """
-        self._make_request(Method.DELETE, f"check/{check_id}")
+        self._make_request(Method.DELETE, f"checks/{check_id}")
 
     def metric_get(self, metric_id: Union[str, int, list] = None) -> Union[list, Metric]:
         """This method is used to retrieve metrics
@@ -175,15 +155,15 @@ class QApi:
         """
         if metric_id:
             if isinstance(metric_id, list):
-                ret = self._make_request(Method.GET, "metric", {"filter": [str(x) for x in metric_id]})
+                ret = self._make_request(Method.GET, "metrics", {"filter": [str(x) for x in metric_id]})
                 return [Metric(**x) for x in ret["data"]]
             elif isinstance(metric_id, str) or isinstance(metric_id, int):
-                ret = self._make_request(Method.GET, f"metric/{str(metric_id)}")
+                ret = self._make_request(Method.GET, f"metrics/{str(metric_id)}")
                 return Metric(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "metric")
+            ret = self._make_request(Method.GET, "metrics")
         return [Metric(**x) for x in ret["data"]]
 
     def metric_create(
@@ -223,7 +203,7 @@ class QApi:
             params["notification_period"] = notification_period_id
         if variables:
             params["variables"] = variables
-        ret = self._make_request(Method.POST, "metric", data=params)
+        ret = self._make_request(Method.POST, "metrics", data=params)
         return ret["data"]
 
     def metric_update(self, metric_id: Union[str, int], changes: dict) -> None:
@@ -233,7 +213,7 @@ class QApi:
         :param changes: Dictionary with MetricParam as key and its value as str
         """
         changes = {x.value if isinstance(x, CheckParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"metric/{metric_id}", data=changes)
+        self._make_request(Method.PUT, f"metrics/{metric_id}", data=changes)
 
     def metric_delete(self, metric_id: Union[str, int]):
         """This method is used to delete a metric
@@ -241,7 +221,7 @@ class QApi:
         :param metric_id: ID of the Metric to delete
         :return:
         """
-        self._make_request(Method.DELETE, f"metric/{metric_id}")
+        self._make_request(Method.DELETE, f"metrics/{metric_id}")
 
     def time_period_get(self, time_period_id: Union[int, str, list] = None) -> Union[list, TimePeriod]:
         """This method is used to retrieve a time period
@@ -252,15 +232,15 @@ class QApi:
         """
         if time_period_id:
             if isinstance(time_period_id, list):
-                ret = self._make_request(Method.GET, "timeperiod", {"filter": [str(x) for x in time_period_id]})
+                ret = self._make_request(Method.GET, "timeperiods", {"filter": [str(x) for x in time_period_id]})
                 return [TimePeriod(**x) for x in ret["data"]]
             elif isinstance(time_period_id, str) or isinstance(time_period_id, int):
-                ret = self._make_request(Method.GET, f"timeperiod/{time_period_id}")
+                ret = self._make_request(Method.GET, f"timeperiods/{time_period_id}")
                 return TimePeriod(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "timeperiod")
+            ret = self._make_request(Method.GET, "timeperiods")
         return [TimePeriod(**x) for x in ret["data"]]
 
     def time_period_create(self, name: str, time_periods: dict) -> int:
@@ -275,7 +255,7 @@ class QApi:
             "name": name,
             "time_periods": time_periods
         }
-        ret = self._make_request(Method.POST, "timeperiod", data=params)
+        ret = self._make_request(Method.POST, "timeperiods", data=params)
         return ret["data"]
 
     def time_period_update(self, time_period_id: Union[str, int], changes: dict) -> None:
@@ -285,14 +265,14 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, TimePeriodParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"timeperiod/{time_period_id}", data=changes)
+        self._make_request(Method.PUT, f"timeperiods/{time_period_id}", data=changes)
 
     def time_period_delete(self, time_period_id: Union[str, int]) -> None:
         """This method is used to delete a TimePeriod
 
         :param time_period_id: ID of the TimePeriod
         """
-        self._make_request(Method.DELETE, f"timeperiod/{time_period_id}")
+        self._make_request(Method.DELETE, f"timeperiods/{time_period_id}")
 
     def global_variable_get(self, global_variable_id: Union[str, int, list] = None) -> Union[list, GlobalVariable]:
         """This method is used to create a GlobalVariable.
@@ -303,15 +283,15 @@ class QApi:
         """
         if global_variable_id:
             if isinstance(global_variable_id, list):
-                ret = self._make_request(Method.GET, "globalvariable", {"filter": [str(x) for x in global_variable_id]})
+                ret = self._make_request(Method.GET, "globalvariables", {"filter": [str(x) for x in global_variable_id]})
                 return [GlobalVariable(**x) for x in ret["data"]]
             elif isinstance(global_variable_id, str) or isinstance(global_variable_id, int):
-                ret = self._make_request(Method.GET, f"globalvariable/{global_variable_id}")
+                ret = self._make_request(Method.GET, f"globalvariables/{global_variable_id}")
                 return GlobalVariable(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "globalvariable")
+            ret = self._make_request(Method.GET, "globalvariables")
         return [GlobalVariable(**x) for x in ret["data"]]
 
     def global_variable_update(self, global_variable_id: Union[str, int], changes: dict) -> None:
@@ -321,14 +301,14 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, TimePeriodParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"globalvariable/{global_variable_id}", data=changes)
+        self._make_request(Method.PUT, f"globalvariables/{global_variable_id}", data=changes)
 
     def global_variable_delete(self, global_variable_id: Union[str, int]) -> None:
         """This method is used to delete a GlobalVariable
 
         :param global_variable_id: ID of the GlobalVariable
         """
-        self._make_request(Method.DELETE, f"globalvariable/{global_variable_id}")
+        self._make_request(Method.DELETE, f"globalvariables/{global_variable_id}")
 
     def metric_template_get(self, metric_template_id: Union[str, int, list] = None) -> Union[list, MetricTemplate]:
         """This method is used to create a MetricTemplate.
@@ -339,15 +319,15 @@ class QApi:
         """
         if metric_template_id:
             if isinstance(metric_template_id, list):
-                ret = self._make_request(Method.GET, "metrictemplate", {"filter": [str(x) for x in metric_template_id]})
+                ret = self._make_request(Method.GET, "metrictemplates", {"filter": [str(x) for x in metric_template_id]})
                 return [MetricTemplate(**x) for x in ret["data"]]
             elif isinstance(metric_template_id, str) or isinstance(metric_template_id, int):
-                ret = self._make_request(Method.GET, f"metrictemplate/{metric_template_id}")
+                ret = self._make_request(Method.GET, f"metrictemplates/{metric_template_id}")
                 return MetricTemplate(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "metrictemplate")
+            ret = self._make_request(Method.GET, "metrictemplates")
         return [MetricTemplate(**x) for x in ret["data"]]
 
     def metric_template_create(
@@ -381,7 +361,7 @@ class QApi:
         if variables:
             params["variables"] = variables
 
-        ret = self._make_request(Method.POST, "metrictemplate", data=params)
+        ret = self._make_request(Method.POST, "metrictemplates", data=params)
         return ret["data"]
 
     def metric_template_update(self, metric_template_id: Union[str, int], changes: dict) -> None:
@@ -391,7 +371,7 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, MetricTemplateParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"metrictemplate/{metric_template_id}", data=changes)
+        self._make_request(Method.PUT, f"metrictemplates/{metric_template_id}", data=changes)
 
     def metric_template_delete(self, metric_template_id: Union[str, int]) -> None:
         """This method is used to delete a MetricTemplate
@@ -409,15 +389,15 @@ class QApi:
         """
         if contact_group_id:
             if isinstance(contact_group_id, list):
-                ret = self._make_request(Method.GET, "contactgroup", {"filter": [str(x) for x in contact_group_id]})
+                ret = self._make_request(Method.GET, "contactgroups", {"filter": [str(x) for x in contact_group_id]})
                 return [ContactGroup(**x) for x in ret["data"]]
             elif isinstance(contact_group_id, str) or isinstance(contact_group_id, int):
-                ret = self._make_request(Method.GET, f"contactgroup/{contact_group_id}")
+                ret = self._make_request(Method.GET, f"contactgroups/{contact_group_id}")
                 return ContactGroup(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "contactgroup")
+            ret = self._make_request(Method.GET, "contactgroups")
         return [ContactGroup(**x) for x in ret["data"]]
 
     def contact_group_create(self, name: str, linked_contacts: Union[list, str, int] = None) -> None:
@@ -429,7 +409,7 @@ class QApi:
         params = {"name": name}
         if linked_contacts:
             params["linked_contacts"] = linked_contacts
-        self._make_request(Method.POST, "contactgroup", data=params)
+        self._make_request(Method.POST, "contactgroups", data=params)
 
     def contact_group_update(self, contact_group_id: Union[str, int], changes: dict) -> None:
         """This method is used to update a ContactGroup
@@ -438,14 +418,14 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, ContactGroupParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"contactgroup/{contact_group_id}", data=changes)
+        self._make_request(Method.PUT, f"contactgroups/{contact_group_id}", data=changes)
 
     def contact_group_delete(self, contact_group_id: Union[str, int]) -> None:
         """This method is used to delete a ContactGroup
 
         :param contact_group_id: ID of the ContactGroup
         """
-        self._make_request(Method.DELETE, f"contactgroup/{contact_group_id}")
+        self._make_request(Method.DELETE, f"contactgroups/{contact_group_id}")
 
     def contact_get(self, contact_id: Union[str, int, list] = None) -> Union[list, Contact]:
         """This method is used to retrieve a Contact or a list of them
@@ -454,15 +434,15 @@ class QApi:
         """
         if contact_id:
             if isinstance(contact_id, list):
-                ret = self._make_request(Method.GET, "contact", {"filter": [str(x) for x in contact_id]})
+                ret = self._make_request(Method.GET, "contacts", {"filter": [str(x) for x in contact_id]})
                 return [Contact(**x) for x in ret["data"]]
             elif isinstance(contact_id, str) or isinstance(contact_id, int):
-                ret = self._make_request(Method.GET, f"contact/{contact_id}")
+                ret = self._make_request(Method.GET, f"contacts/{contact_id}")
                 return Contact(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "contact")
+            ret = self._make_request(Method.GET, "contacts")
         return [Contact(**x) for x in ret["data"]]
 
     def contact_create(
@@ -494,7 +474,7 @@ class QApi:
             params["linked_metric_notification_period"] = linked_metric_notification_period_id
         if variables:
             params["variables"] = variables
-        ret = self._make_request(Method.POST, "contact", data=params)
+        ret = self._make_request(Method.POST, "contacts", data=params)
         return ret["data"]
 
     def contact_update(self, contact_id: Union[str, int], changes: dict) -> None:
@@ -504,14 +484,14 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, ContactParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"contact/{contact_id}", data=changes)
+        self._make_request(Method.PUT, f"contacts/{contact_id}", data=changes)
 
     def contact_delete(self, contact_id: Union[str, int]) -> None:
         """This method is used to delete a Contact
 
         :param contact_id: ID of the Contact
         """
-        self._make_request(Method.DELETE, f"contact/{contact_id}")
+        self._make_request(Method.DELETE, f"contacts/{contact_id}")
 
     def host_template_get(self, host_template_id: Union[str, int, list] = None) -> Union[list, HostTemplate]:
         """This method is used to retrieve a HostTemplate or a list of them
@@ -520,15 +500,15 @@ class QApi:
         """
         if host_template_id:
             if isinstance(host_template_id, list):
-                ret = self._make_request(Method.GET, "hosttemplate", {"filter": [str(x) for x in host_template_id]})
+                ret = self._make_request(Method.GET, "hosttemplates", {"filter": [str(x) for x in host_template_id]})
                 return [HostTemplate(**x) for x in ret["data"]]
             elif isinstance(host_template_id, str) or isinstance(host_template_id, int):
-                ret = self._make_request(Method.GET, f"hosttemplate/{host_template_id}")
+                ret = self._make_request(Method.GET, f"hosttemplates/{host_template_id}")
                 return HostTemplate(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "hosttemplate")
+            ret = self._make_request(Method.GET, "hosttemplates")
         return [HostTemplate(**x) for x in ret["data"]]
 
     def host_template_create(
@@ -563,7 +543,7 @@ class QApi:
             params["notification_period"] = notification_period_id
         if variables:
             params["variables"] = variables
-        ret = self._make_request(Method.POST, "hosttemplate", data=params)
+        ret = self._make_request(Method.POST, "hosttemplates", data=params)
         return ret["data"]
 
     def host_template_update(self, host_template_id: Union[str, int], changes: dict) -> None:
@@ -573,14 +553,14 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, HostTemplateParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"hosttemplate/{host_template_id}", data=changes)
+        self._make_request(Method.PUT, f"hosttemplates/{host_template_id}", data=changes)
 
     def host_template_delete(self, host_template_id: Union[str, int]) -> None:
         """This method is used to delete a HostTemplate
 
         :param host_template_id: ID of the HostTemplate
         """
-        self._make_request(Method.DELETE, f"hosttemplate/{host_template_id}")
+        self._make_request(Method.DELETE, f"hosttemplates/{host_template_id}")
 
     def host_get(self, host_id: Union[str, int, list] = None) -> Union[list, Host]:
         """This method is used to retrieve a Host or a list of them
@@ -589,15 +569,15 @@ class QApi:
         """
         if host_id:
             if isinstance(host_id, list):
-                ret = self._make_request(Method.GET, "host", {"filter": [str(x) for x in host_id]})
+                ret = self._make_request(Method.GET, "hosts", {"filter": [str(x) for x in host_id]})
                 return [Host(**x) for x in ret["data"]]
             elif isinstance(host_id, str) or isinstance(host_id, int):
-                ret = self._make_request(Method.GET, f"host/{host_id}")
+                ret = self._make_request(Method.GET, f"hosts/{host_id}")
                 return Host(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "host")
+            ret = self._make_request(Method.GET, "hosts")
         return [Host(**x) for x in ret["data"]]
 
     def host_create(
@@ -634,7 +614,7 @@ class QApi:
             params["notification_period"] = notification_period_id
         if variables:
             params["variables"] = variables
-        ret = self._make_request(Method.POST, "host", data=params)
+        ret = self._make_request(Method.POST, "hosts", data=params)
         return ret["data"]
 
     def host_update(self, host_id: Union[str, int], changes: dict) -> None:
@@ -644,14 +624,14 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, HostParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"host/{host_id}", data=changes)
+        self._make_request(Method.PUT, f"hosts/{host_id}", data=changes)
 
     def host_delete(self, host_id: Union[str, int]) -> None:
         """This method is used to delete a Host
 
         :param host_id: ID of the Host
         """
-        self._make_request(Method.DELETE, f"host/{host_id}")
+        self._make_request(Method.DELETE, f"hosts/{host_id}")
 
     def proxy_get(self, proxy_id: Union[str, int, list] = None) -> Union[list, Proxy]:
         """This method is used to retrieve a Proxy or a list of them
@@ -660,15 +640,15 @@ class QApi:
         """
         if proxy_id:
             if isinstance(proxy_id, list):
-                ret = self._make_request(Method.GET, "proxy", {"filter": [str(x) for x in proxy_id]})
+                ret = self._make_request(Method.GET, "proxies", {"filter": [str(x) for x in proxy_id]})
                 return [Proxy(**x) for x in ret["data"]]
             elif isinstance(proxy_id, str) or isinstance(proxy_id, int):
-                ret = self._make_request(Method.GET, f"proxy/{proxy_id}")
+                ret = self._make_request(Method.GET, f"proxies/{proxy_id}")
                 return Proxy(**ret["data"])
             else:
                 raise ValueError
         else:
-            ret = self._make_request(Method.GET, "proxy")
+            ret = self._make_request(Method.GET, "proxies")
         return [Proxy(**x) for x in ret["data"]]
 
     def proxy_create(
@@ -695,7 +675,7 @@ class QApi:
         }
         if comment:
             params["comment"] = comment
-        ret = self._make_request(Method.POST, "proxy", data=params)
+        ret = self._make_request(Method.POST, "proxies", data=params)
         return ret["data"]
 
     def proxy_update(self, proxy_id: Union[str, int], changes: dict) -> None:
@@ -705,16 +685,16 @@ class QApi:
         :param changes: Changes to submit. The keys define the parameter to update and the value sets its value.
         """
         changes = {x.value if isinstance(x, ProxyParam) else x: changes[x] for x in changes}
-        self._make_request(Method.PUT, f"proxy/{proxy_id}", data=changes)
+        self._make_request(Method.PUT, f"proxies/{proxy_id}", data=changes)
 
     def proxy_delete(self, proxy_id: Union[str, int]) -> None:
         """This method is used to delete a Proxy
 
         :param proxy_id: ID of the Proxy
         """
-        self._make_request(Method.DELETE, f"proxy/{proxy_id}")
+        self._make_request(Method.DELETE, f"proxies/{proxy_id}")
 
-    def update_declaration(self, proxies: Union[list, str, int] = None) -> None:
+    def update_declaration(self, proxies: Union[list, str, int] = None) -> dict:
         """This method is used to update the declaration of a proxy
 
         :param proxies: List of proxy_ids, proxy_ids or None. If None, all declarations will be updated
@@ -722,7 +702,8 @@ class QApi:
         data = {
             "proxies": proxies if isinstance(proxies, list) else str(proxies)
         }
-        self._make_request(Method.POST, "updateDeclaration", data=data if proxies else None, timeout=30)
+        ret = self._make_request(Method.POST, "updateDeclaration", data=data if proxies else None, timeout=30)
+        return ret["data"]
 
     def generate_proxy_configuration(self, proxy_id: int):
         """This method is used to generate the configuration for a proxy

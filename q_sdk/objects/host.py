@@ -6,7 +6,8 @@ from objects.base import Base
 class Host(Base):
     def __init__(
         self, name, linked_proxy, id=None, address="", linked_check=None, disabled=False, host_templates=None,
-        scheduling_interval=None, scheduling_period=None, notification_period=None, variables=None, comment=""
+        scheduling_interval=None, scheduling_period=None, notification_period=None, variables=None, comment="",
+        linked_contacts=None, linked_contact_groups=None
     ):
         super(Host, self).__init__()
         self.name = name
@@ -21,6 +22,8 @@ class Host(Base):
         self.notification_period = notification_period
         self.variables = variables
         self.comment = comment
+        self.linked_contacts = linked_contacts
+        self.linked_contact_groups = linked_contact_groups
 
 
 class HostParam(enum.Enum):
@@ -42,3 +45,7 @@ class HostParam(enum.Enum):
     """TimePeriod for executing notifications for the host"""
     VARIABLES = "variables"
     """Key Value Pairs of the host."""
+    LINKED_CONTACTS = "linked_contacts"
+    """Linked contacts"""
+    LINKED_CONTACT_GROUPS = "linked_contact_groups"
+    """Linked contact groups"""
