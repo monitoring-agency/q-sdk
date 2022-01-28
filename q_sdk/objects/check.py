@@ -9,14 +9,14 @@ class Check(Base):
     :param id: ID of the check
     :param name: Name of the check
     :param cmd: Commandline to execute
-    :param check_type: CheckType of the check
+    :param comment: Associated comment
     """
-    def __init__(self, name, id=None, cmd="", check_type=""):
+    def __init__(self, name=None, id=None, cmd=None, comment=None):
         super().__init__()
         self.name = name
         self.id = id
         self.cmd = cmd
-        self.check_type = check_type
+        self.comment = comment
 
 
 class CheckParam(enum.Enum):

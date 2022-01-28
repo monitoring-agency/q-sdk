@@ -92,24 +92,28 @@ class QApi:
             pprint(decoded["message"])
         return decoded
 
-    def check_get(self, check_id: Union[list, str, int] = None) -> Union[list, Check]:
+    def check_get(
+            self, *,
+            check_id: Union[list, str, int] = None,
+            values: Union[list[str], str] = None
+    ) -> Union[list, Check]:
         """This method is used to retrieve checks
 
         :param check_id: If None, all checks are retrieved. Str or int to retrieve a single check.
         List of str or int to retrieve a list of checks.
+        :param values: Optional. List of attributes you want to retrieve.
         :return: Check or List of Checks
         """
+        data = {}
         if check_id:
-            if isinstance(check_id, list):
-                ret = self._make_request(Method.GET, "checks", {"filter": [str(x) for x in check_id]})
-                return [Check(**x) for x in ret["data"]]
-            elif isinstance(check_id, str) or isinstance(check_id, int):
-                ret = self._make_request(Method.GET, f"checks/{str(check_id)}")
+            data["filter"] = check_id
+        if values:
+            data["values"] = values
+        if check_id:
+            if isinstance(check_id, str) or isinstance(check_id, int):
+                ret = self._make_request(Method.GET, f"checks/{str(check_id)}", data=data)
                 return Check(**ret["data"])
-            else:
-                raise ValueError
-        else:
-            ret = self._make_request(Method.GET, "checks")
+        ret = self._make_request(Method.GET, "checks", data=data)
         return [Check(**x) for x in ret["data"]]
 
     def check_create(self, name: str, cmd: str = "", check_type: str = "") -> int:
